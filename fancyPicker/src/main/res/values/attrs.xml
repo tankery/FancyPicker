@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="FancyPickerLayout">
+        <attr name="fp_start_angle" format="float"/>
+        <attr name="fp_end_angle" format="float"/>
+        <attr name="fp_orbit_stroke_width" format="dimension"/>
+        <attr name="fp_orbit_base_color" format="color"/>
+    </declare-styleable>
+    <declare-styleable name="FancyPickerItem">
+        <attr name="fp_item_color" format="color"/>
+        <attr name="fp_item_progress_color" format="color"/>
+        <attr name="fp_item_hover_color" format="color"/>
+    </declare-styleable>
+</resources>
