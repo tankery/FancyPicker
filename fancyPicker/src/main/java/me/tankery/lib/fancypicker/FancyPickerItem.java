@@ -11,6 +11,9 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.widget.FrameLayout;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import me.tankery.lib.circularseekbar.CircularSeekBar;
 
 /**
@@ -47,9 +50,11 @@ public class FancyPickerItem extends FrameLayout implements
 
         public abstract void onProgressChanged(FancyPickerItem pickerItem, float progress, boolean fromUser);
 
+        public abstract void onStartTrackingTouch(FancyPickerItem pickerItem);
+
         public abstract void onStopTrackingTouch(FancyPickerItem pickerItem);
 
-        public abstract void onStartTrackingTouch(FancyPickerItem seekBar);
+        public abstract void onEndTrackingAnimation(FancyPickerItem pickerItem);
     }
 
     /**
@@ -94,14 +99,14 @@ public class FancyPickerItem extends FrameLayout implements
     /**
      * {@code Paint} instance used to draw the static item value
      */
-    private Paint itemBasePaint;
+    private Paint itemBasePaint = new Paint();
 
     /**
      * {@code Path} used to draw the static item value.
      */
-    private Path itemBasePath;
+    private Path itemBasePath = new Path();
 
-    private RectF circlePathRect;
+    private RectF circlePathRect = new RectF();
 
 
     /**
@@ -109,7 +114,7 @@ public class FancyPickerItem extends FrameLayout implements
      */
     private CircularSeekBar circularSeekBar;
 
-    private OnFancyPickerItemChangeListener onFancyPickerItemChangeListener;
+    private List<OnFancyPickerItemChangeListener> onChangeListeners;
 
     public FancyPickerItem(Context context) {
         super(context);
@@ -118,7 +123,6 @@ public class FancyPickerItem extends FrameLayout implements
 
     public FancyPickerItem(Context context, AttributeSet attrs) {
         super(context, attrs);
-        circularSeekBar = new CircularSeekBar(context, attrs);
         init(attrs, 0);
     }
 
@@ -127,8 +131,14 @@ public class FancyPickerItem extends FrameLayout implements
         init(attrs, defStyle);
     }
 
-    public void setOnFancyPickerItemChangeListener(OnFancyPickerItemChangeListener listener) {
-        onFancyPickerItemChangeListener = listener;
+    public void addOnFancyPickerItemChangeListener(OnFancyPickerItemChangeListener listener) {
+        onChangeListeners.add(listener);
+    }
+    public void removeOnFancyPickerItemChangeListener(OnFancyPickerItemChangeListener listener) {
+        onChangeListeners.remove(listener);
+    }
+    public boolean hasOnFancyPickerItemChangeListener(OnFancyPickerItemChangeListener listener) {
+        return onChangeListeners.contains(listener);
     }
 
     /**
@@ -143,6 +153,18 @@ public class FancyPickerItem extends FrameLayout implements
             recalculateLayout();
         }
     }
+
+    public void setGeometry(float startAngle, float endAngle, float strokeWidth) {
+        this.startAngle = startAngle;
+        this.endAngle = endAngle;
+        this.strokeWidth = strokeWidth;
+        recalculateLayout();
+    }
+
+    protected RectF getCirclePathRect() {
+        return circlePathRect;
+    }
+
 
     private void init(AttributeSet attrs, int defStyle) {
         final TypedArray attrArray = getContext().obtainStyledAttributes(attrs, R.styleable.FancyPickerItem, defStyle, 0);
@@ -159,6 +181,7 @@ public class FancyPickerItem extends FrameLayout implements
         initPaths();
 
         setWillNotDraw(false);
+        onChangeListeners = new ArrayList<>();
     }
 
     /**
@@ -177,14 +200,11 @@ public class FancyPickerItem extends FrameLayout implements
         endAngle = DEFAULT_END_ANGLE;
         strokeWidth = DEFAULT_STROKE_WIDTH;
         progress = 0;
-        circlePathRect = new RectF();
     }
 
     private void initCircularSeekBar() {
-        circularSeekBar.setCircleStrokeWidth(strokeWidth);
         circularSeekBar.setCircleColor(Color.TRANSPARENT);
         circularSeekBar.setCircleProgressColor(itemProgressColor);
-        circularSeekBar.setPointerStrokeWidth(strokeWidth);
         circularSeekBar.setPointerColor(itemProgressColor);
         circularSeekBar.setPointerHaloColor(itemProgressHoverColor);
         circularSeekBar.setCircleStyle(Paint.Cap.BUTT);
@@ -202,7 +222,7 @@ public class FancyPickerItem extends FrameLayout implements
      * Initializes the {@code Paint} objects with the appropriate styles.
      */
     private void initPaints() {
-        itemBasePaint = new Paint();
+        itemBasePaint.reset();
         itemBasePaint.setAntiAlias(true);
         itemBasePaint.setDither(true);
         itemBasePaint.setColor(itemBaseColor);
@@ -213,7 +233,7 @@ public class FancyPickerItem extends FrameLayout implements
     }
 
     private void initPaths() {
-        itemBasePath = new Path();
+        itemBasePath.reset();
         float diff = endAngle - startAngle;
         if (diff < 0) diff += 360;
         itemBasePath.addArc(circlePathRect, startAngle, diff);
@@ -222,6 +242,8 @@ public class FancyPickerItem extends FrameLayout implements
     private void updateCircularSeekBar() {
         circularSeekBar.setEnabled(false);
         circularSeekBar.setProgress(progress);
+        circularSeekBar.setCircleStrokeWidth(strokeWidth);
+        circularSeekBar.setPointerStrokeWidth(strokeWidth);
 
         // Update angle
         float diff = endAngle - startAngle;
@@ -241,6 +263,8 @@ public class FancyPickerItem extends FrameLayout implements
         @Override
         public void run() {
             circularSeekBar.setVisibility(INVISIBLE);
+            for (OnFancyPickerItemChangeListener listener : onChangeListeners)
+                listener.onEndTrackingAnimation(FancyPickerItem.this);
         }
     };
 
@@ -260,6 +284,7 @@ public class FancyPickerItem extends FrameLayout implements
 
     private void recalculateLayout() {
         updateCircularSeekBar();
+        initPaints();
         initPaths();
         invalidate();
     }
@@ -305,23 +330,22 @@ public class FancyPickerItem extends FrameLayout implements
     @Override
     public void onProgressChanged(CircularSeekBar circularSeekBar, float progress, boolean fromUser) {
         this.progress = progress;
-        if (onFancyPickerItemChangeListener != null)
-            onFancyPickerItemChangeListener.onProgressChanged(this, this.progress, fromUser);
+        for (OnFancyPickerItemChangeListener listener : onChangeListeners)
+            listener.onProgressChanged(this, this.progress, fromUser);
     }
 
     @Override
     public void onStopTrackingTouch(CircularSeekBar seekBar) {
         // update layout when value changed.
         recalculateLayout();
-        if (onFancyPickerItemChangeListener != null)
-            onFancyPickerItemChangeListener.onStopTrackingTouch(this);
+        for (OnFancyPickerItemChangeListener listener : onChangeListeners)
+            listener.onStopTrackingTouch(this);
     }
 
     @Override
     public void onStartTrackingTouch(CircularSeekBar seekBar) {
-        if (onFancyPickerItemChangeListener != null) {
-            onFancyPickerItemChangeListener.onStartTrackingTouch(this);
-        }
+        for (OnFancyPickerItemChangeListener listener : onChangeListeners)
+            listener.onStartTrackingTouch(this);
     }
 
     private boolean touchInRange(MotionEvent event) {

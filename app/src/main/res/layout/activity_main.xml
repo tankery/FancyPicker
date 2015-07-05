@@ -36,6 +36,38 @@
                 android:minHeight="320dp"
                 android:layout_margin="16dp"/>
 
+            <me.tankery.lib.fancypicker.FancyPickerLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="16dp"
+                android:minHeight="320dp"
+                app:fp_orbit_stroke_width="60dp"
+                app:fp_start_angle="180"
+                app:fp_end_angle="360">
+
+                <me.tankery.lib.fancypicker.FancyPickerItem
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:fp_item_color="@color/holo_red_dark"
+                    app:fp_item_progress_color="@color/holo_red_dark"
+                    app:fp_item_hover_color="@color/holo_red_light"/>
+
+                <me.tankery.lib.fancypicker.FancyPickerItem
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:fp_item_color="@color/holo_blue_dark"
+                    app:fp_item_progress_color="@color/holo_blue_dark"
+                    app:fp_item_hover_color="@color/holo_blue_light"/>
+
+                <me.tankery.lib.fancypicker.FancyPickerItem
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:fp_item_color="@color/holo_green_dark"
+                    app:fp_item_progress_color="@color/holo_green_dark"
+                    app:fp_item_hover_color="@color/holo_green_light"/>
+
+            </me.tankery.lib.fancypicker.FancyPickerLayout>
+
         </LinearLayout>
 
     </ScrollView>
