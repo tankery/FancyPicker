@@ -28,7 +28,8 @@
                 android:layout_height="wrap_content"
                 android:minHeight="320dp"
                 android:layout_margin="16dp"
-                app:cs_circle_stroke_width="6"/>
+                app:cs_circle_stroke_width="6"
+                app:cs_negative_enabled="true"/>
 
             <me.tankery.lib.fancypicker.FancyPickerItem
                 android:layout_width="match_parent"

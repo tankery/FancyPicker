@@ -1,5 +1,7 @@
 package me.tankery.lib.fancypicker;
 
+import android.animation.Animator;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
@@ -9,6 +11,7 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.FrameLayout;
 
 import java.util.ArrayList;
@@ -94,6 +97,10 @@ public class FancyPickerItem extends FrameLayout implements
      * This value of progress is from -100 ~ 100
      */
     private float progress;
+    /**
+     * progress when touch down
+     */
+    private float touchStartProgress;
 
 
     /**
@@ -200,6 +207,7 @@ public class FancyPickerItem extends FrameLayout implements
         endAngle = DEFAULT_END_ANGLE;
         strokeWidth = DEFAULT_STROKE_WIDTH;
         progress = 0;
+        touchStartProgress = 0;
     }
 
     private void initCircularSeekBar() {
@@ -234,8 +242,7 @@ public class FancyPickerItem extends FrameLayout implements
 
     private void initPaths() {
         itemBasePath.reset();
-        float diff = endAngle - startAngle;
-        if (diff < 0) diff += 360;
+        float diff = normalizeAngle(endAngle - startAngle);
         itemBasePath.addArc(circlePathRect, startAngle, diff);
     }
 
@@ -246,14 +253,56 @@ public class FancyPickerItem extends FrameLayout implements
         circularSeekBar.setPointerStrokeWidth(strokeWidth);
 
         // Update angle
-        float diff = endAngle - startAngle;
-        if (diff < 0) diff += 360;
+        float diff = normalizeAngle(endAngle - startAngle);
         circularSeekBar.setPointerAngle(diff);
 
-        float start = getProgressBarOriginPoint();
-        circularSeekBar.setStartAngle(start);
-        circularSeekBar.setEndAngle(start);
+        if ((progress - touchStartProgress) % 360 != 0) {
 
+            float targetStart = getAnimatableProgressBarTargetStartAngle();
+            float currentStart = circularSeekBar.getStartAngle();
+
+            ValueAnimator rotate = ValueAnimator.ofFloat(currentStart, targetStart);
+            rotate.setDuration(getResources().getInteger(R.integer.progress_bar_end_animation));
+            rotate.setInterpolator(new AccelerateDecelerateInterpolator());
+            rotate.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                @Override
+                public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                    float value = (Float) valueAnimator.getAnimatedValue();
+                    setSeekBarOrigin(value);
+                }
+            });
+            rotate.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) { }
+                @Override
+                public void onAnimationRepeat(Animator animator) { }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    delayHideSeekBar();
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+                    hideCircularSeekBarRunnable.run();
+                }
+            });
+            rotate.start();
+        } else {
+            // Make sure the seek bar is on right position.
+            setSeekBarOrigin(getProgressBarOriginPoint());
+
+            delayHideSeekBar();
+        }
+    }
+
+    private void setSeekBarOrigin(float origin) {
+        origin = normalizeAngle(origin);
+        circularSeekBar.setStartAngle(origin);
+        circularSeekBar.setEndAngle(origin);
+    }
+
+    private void delayHideSeekBar() {
         if (circularSeekBar.getVisibility() == VISIBLE) {
             postDelayed(hideCircularSeekBarRunnable, 500);
         }
@@ -268,18 +317,45 @@ public class FancyPickerItem extends FrameLayout implements
         }
     };
 
+    private float normalizeAngle(float angle) {
+        while (angle > 360) angle -= 360;
+        while (angle < 0) angle += 360;
+
+        return angle;
+    }
+
+    private float getProgressBarValueArcCenter() {
+        float crossAngle = normalizeAngle(endAngle - startAngle);
+        float centerAngle = 0.5f * crossAngle + startAngle;
+
+        return normalizeAngle(centerAngle);
+    }
+
     private float getProgressBarOriginPoint() {
         // Update angle
-        float crossAngle = (endAngle - startAngle);
-        if (crossAngle < 0) crossAngle += 360;
-        float centerAngle = 0.5f * crossAngle + startAngle;
-        if (centerAngle > 360) centerAngle -= 360;
+        float centerAngle = getProgressBarValueArcCenter();
 
         float start = centerAngle - 360f * progress / 100;
-        if (start < 0) start += 360;
-        else if (start > 360f) start -= 360;
 
-        return start;
+        return normalizeAngle(start);
+    }
+
+    private float getAnimatableProgressBarTargetStartAngle() {
+        float targetStart = getProgressBarOriginPoint();
+        float currentStart = circularSeekBar.getStartAngle();
+
+        // Choose the right animation direction.
+        boolean cwRotate = (progress < touchStartProgress);
+
+        if (cwRotate) {
+            float delta = normalizeAngle(targetStart - currentStart);
+            targetStart = currentStart + delta;
+        } else {
+            float delta = normalizeAngle(currentStart - targetStart);
+            targetStart = currentStart - delta;
+        }
+
+        return targetStart;
     }
 
     private void recalculateLayout() {
@@ -338,6 +414,7 @@ public class FancyPickerItem extends FrameLayout implements
     public void onStopTrackingTouch(CircularSeekBar seekBar) {
         // update layout when value changed.
         recalculateLayout();
+        touchStartProgress = progress;
         for (OnFancyPickerItemChangeListener listener : onChangeListeners)
             listener.onStopTrackingTouch(this);
     }
@@ -346,6 +423,9 @@ public class FancyPickerItem extends FrameLayout implements
     public void onStartTrackingTouch(CircularSeekBar seekBar) {
         for (OnFancyPickerItemChangeListener listener : onChangeListeners)
             listener.onStartTrackingTouch(this);
+
+        // Save touch down progress
+        touchStartProgress = progress;
     }
 
     private boolean touchInRange(MotionEvent event) {
@@ -378,12 +458,9 @@ public class FancyPickerItem extends FrameLayout implements
         touchAngle = (float) ((Math.atan2(y, x) / Math.PI * 180) % 360); // Verified
         touchAngle = (touchAngle < 0 ? 360 + touchAngle : touchAngle); // Verified
 
-        float crossAngle = (endAngle - startAngle);
-        if (crossAngle < 0) crossAngle += 360;
-        float centerAngle = 0.5f * crossAngle + startAngle;
-        if (centerAngle > 360) centerAngle -= 360;
-        float cwDistanceFromPointer = touchAngle - centerAngle;
-        if (cwDistanceFromPointer < 0) cwDistanceFromPointer += 360;
+        float crossAngle = normalizeAngle(endAngle - startAngle);
+        float centerAngle = normalizeAngle(0.5f * crossAngle + startAngle);
+        float cwDistanceFromPointer = normalizeAngle(touchAngle - centerAngle);
         float ccwDistanceFromPointer = 360f - cwDistanceFromPointer;
 
         return ((touchEventRadius >= innerRadius) && (touchEventRadius <= outerRadius)) &&
