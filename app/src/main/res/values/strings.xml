@@ -3,4 +3,9 @@
 
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
+
+    <string name="fancy_item_value">OK</string>
+    <string name="fancy_item_1">Item 1</string>
+    <string name="fancy_item_2">Item 2</string>
+    <string name="fancy_item_3">Item 3</string>
 </resources>

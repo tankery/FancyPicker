@@ -9,10 +9,12 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.support.annotation.NonNull;
 import android.util.AttributeSet;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.animation.AccelerateDecelerateInterpolator;
-import android.widget.FrameLayout;
+import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +26,7 @@ import me.tankery.lib.circularseekbar.CircularSeekBar;
  *
  * Item to hold & change the value.
  */
-public class FancyPickerItem extends FrameLayout implements
+public class FancyPickerItem extends TextView implements
         CircularSeekBar.OnCircularSeekBarChangeListener {
 
     /**
@@ -93,6 +95,12 @@ public class FancyPickerItem extends FrameLayout implements
 
 
     /**
+     * position of item base shape center.
+     */
+    float[] itemCenterPos = new float[2];
+
+
+    /**
      * progress of picker.
      * This value of progress is from -100 ~ 100
      */
@@ -151,9 +159,11 @@ public class FancyPickerItem extends FrameLayout implements
     /**
      * Get & set the progress of item.
      */
+    @SuppressWarnings("unused")
     public float getProgress() {
         return progress;
     }
+    @SuppressWarnings("unused")
     public void setProgress(float progress) {
         if (this.progress != progress) {
             this.progress = progress;
@@ -182,12 +192,13 @@ public class FancyPickerItem extends FrameLayout implements
 
         circularSeekBar = new CircularSeekBar(getContext(), attrs, defStyle);
         initCircularSeekBar();
-        addView(circularSeekBar);
 
         initPaints();
         initPaths();
 
         setWillNotDraw(false);
+        setGravity(Gravity.CENTER);
+        setBackgroundColor(Color.TRANSPARENT);
         onChangeListeners = new ArrayList<>();
     }
 
@@ -244,6 +255,8 @@ public class FancyPickerItem extends FrameLayout implements
         itemBasePath.reset();
         float diff = normalizeAngle(endAngle - startAngle);
         itemBasePath.addArc(circlePathRect, startAngle, diff);
+
+        updateItemCenter();
     }
 
     private void updateCircularSeekBar() {
@@ -312,6 +325,8 @@ public class FancyPickerItem extends FrameLayout implements
         @Override
         public void run() {
             circularSeekBar.setVisibility(INVISIBLE);
+            circularSeekBar.setEnabled(false);
+            invalidate();
             for (OnFancyPickerItemChangeListener listener : onChangeListeners)
                 listener.onEndTrackingAnimation(FancyPickerItem.this);
         }
@@ -365,6 +380,24 @@ public class FancyPickerItem extends FrameLayout implements
         invalidate();
     }
 
+    public void updateItemCenter() {
+        float crossAngle = normalizeAngle(endAngle - startAngle);
+        float centerAngle = normalizeAngle(0.5f * crossAngle + startAngle);
+        double itemAnglePolar = normalizeAngle(centerAngle + 90) * 2 * Math.PI / 360;
+        float radius = Math.min(circlePathRect.width(), circlePathRect.height()) / 2.0f;
+        itemCenterPos[0] = (float) (radius * Math.sin(itemAnglePolar));
+        itemCenterPos[1] = - (float) (radius * Math.cos(itemAnglePolar));
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+
+        if (getParent() == null || !(getParent() instanceof FancyPickerLayout)) {
+            throw new RuntimeException("FancyPickerItem must be used inside FancyPickerLayout");
+        }
+    }
+
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
@@ -375,9 +408,8 @@ public class FancyPickerItem extends FrameLayout implements
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
+    protected void onDraw(@NonNull Canvas canvas) {
         if (circularSeekBar.getVisibility() == VISIBLE) {
-            super.onDraw(canvas);
             return;
         }
 
@@ -385,21 +417,16 @@ public class FancyPickerItem extends FrameLayout implements
         canvas.translate(this.getWidth() / 2, this.getHeight() / 2);
 
         canvas.drawPath(itemBasePath, itemBasePaint);
+
+        float[] xy = itemCenterPos;
+        float ts = getTextSize();
+        Paint paint = getPaint();
+        paint.setColor(getCurrentTextColor());
+        paint.setTextSize(getTextSize());
+        paint.setTextAlign(Paint.Align.CENTER);
+        canvas.drawText(getText(), 0, getText().length(), xy[0], xy[1] + ts/2, paint);
+
         canvas.restore();
-    }
-
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-
-        // Because the start - end angle may cross the origin point, we can't compare it with touch angle directly.
-        if ( event.getAction() == MotionEvent.ACTION_DOWN && touchInRange(event)) {
-            // Touch inside the item, enable circular seek bar.
-            circularSeekBar.setVisibility(VISIBLE);
-            circularSeekBar.setEnabled(true);
-            removeCallbacks(hideCircularSeekBarRunnable);
-        }
-
-        return super.dispatchTouchEvent(event);
     }
 
 
@@ -428,7 +455,18 @@ public class FancyPickerItem extends FrameLayout implements
         touchStartProgress = progress;
     }
 
-    private boolean touchInRange(MotionEvent event) {
+    public CircularSeekBar getCircularSeekBar() {
+        return circularSeekBar;
+    }
+
+    public void enableCircularSeekBar() {
+        removeCallbacks(hideCircularSeekBarRunnable);
+        circularSeekBar.setVisibility(VISIBLE);
+        circularSeekBar.setEnabled(true);
+        invalidate();
+    }
+
+    public boolean touchInRange(MotionEvent event) {
 
         // Convert coordinates to our internal coordinate system
         float x = event.getX() - getWidth() / 2;

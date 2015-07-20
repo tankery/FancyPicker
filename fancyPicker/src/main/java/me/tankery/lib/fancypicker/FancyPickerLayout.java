@@ -7,7 +7,9 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.support.annotation.NonNull;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
 
@@ -133,20 +135,26 @@ public class FancyPickerLayout extends FrameLayout implements
     }
 
     @Override
-    protected void onLayout(boolean changed, int l, int t, int r, int b) {
-        super.onLayout(changed, l, t, r, b);
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
 
-        final int count = getChildCount();
-
-        fancyItemIndexes = new int[count];
+        fancyItemIndexes = new int[getChildCount()];
         fancyItemCount = 0;
-        for (int i = 0; i < count; i++) {
+
+        for (int i = 0; i < getChildCount(); i++) {
             View child = getChildAt(i);
             if (child instanceof FancyPickerItem) {
                 fancyItemIndexes[fancyItemCount] = i;
                 fancyItemCount++;
+                addView(((FancyPickerItem) child).getCircularSeekBar(), i + 1);
             }
         }
+
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        super.onLayout(changed, l, t, r, b);
 
         float rangeAngle = endAngle - startAngle;
         if (rangeAngle > 360) rangeAngle -= 360;
@@ -179,6 +187,24 @@ public class FancyPickerLayout extends FrameLayout implements
 
         canvas.drawPath(orbitBasePath, orbitBasePaint);
         canvas.restore();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(@NonNull MotionEvent event) {
+
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            for (int i = 0; i < fancyItemCount; i++) {
+                int pos = fancyItemIndexes[i];
+                FancyPickerItem item = (FancyPickerItem) getChildAt(pos);
+
+                if (item.touchInRange(event)) {
+                    // Touch inside the item, enable circular seek bar.
+                    item.enableCircularSeekBar();
+                }
+            }
+        }
+
+        return super.dispatchTouchEvent(event);
     }
 
     @Override
